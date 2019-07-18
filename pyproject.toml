@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "bareASGI-auth-common"
+version = "0.1.0"
+description = ""
+authors = ["Rob Blackbourn <rblackbourn@ugsb-rbla01.bhdgsystematic.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+bareclient = "^2.0"
+PyJWT = "^1.7"
+
+[tool.poetry.dev-dependencies]
+pytest = "^3.0"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
