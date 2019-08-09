@@ -1,4 +1,3 @@
-bareASGI-auth-common
-====================
+# bareASGI-auth-common
 
 Common code for authentication with bareASGI.
