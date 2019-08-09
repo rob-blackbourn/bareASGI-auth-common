@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bareASGI-auth-common"
-version = "0.1.0"
+version = "1.0.0"
 description = ""
 authors = ["Rob Blackbourn <rob.blackbourn@gmail.com>"]
 license = "Apache-2.0"
