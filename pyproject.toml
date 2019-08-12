@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bareASGI-auth-common"
-version = "1.0.0"
+version = "1.1.0"
 description = ""
 authors = ["Rob Blackbourn <rob.blackbourn@gmail.com>"]
 license = "Apache-2.0"
@@ -13,6 +13,7 @@ packages = [
 python = "^3.7"
 bareclient = "^3.0"
 PyJWT = "^1.7"
+PyYaml = "^5.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^3.0"
