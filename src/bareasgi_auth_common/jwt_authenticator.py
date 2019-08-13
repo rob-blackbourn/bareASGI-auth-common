@@ -21,6 +21,7 @@ from bareutils import response_code, encode_set_cookie
 import bareutils.header as header
 from bareclient import HttpClient
 from .token_manager import TokenManager
+from .utils import get_scheme, get_host
 
 # pylint: disable=invalid-name
 logger = logging.getLogger(__name__)
@@ -46,34 +47,26 @@ class JwtAuthenticator:
         self.token_manager = token_manager
         self.authentication_path = authentication_path
 
+    async def _renew_cookie(
+            self,
+            scope: Scope,
+            token: bytes
+    ) -> Optional[bytes]:
 
-    async def _renew_cookie(self, scope: Scope, token: bytes) -> Optional[bytes]:
-        scope_server_host, scope_server_port = scope['server']
+        scheme = get_scheme(scope).decode('ascii')
+        host = get_host(scope).decode('ascii')
 
-        scheme = header.find(
-            b'x-forwarded-proto',
+        referer_url = f'{scheme}://{host}{scope["path"]}'
+        if scope['query_string']:
+            referer_url += '?' + scope['query_string'].decode('utf-8')
+        referer = header.find(
+            b'referer',
             scope['headers'],
-            scope['scheme'].encode()
-        ).decode()
-        host = header.find(
-            b'x-forwarded-host',
-            scope['headers'],
-            scope_server_host.encode()
-        ).decode()
-        port = int(
-            header.find(
-                b'x-forwarded-port',
-                scope['headers'],
-                str(scope_server_port).encode()
-            ).decode()
+            referer_url.encode('ascii')
         )
 
-        renewal_url = f'{scheme}://{host}{self.token_renewal_path}'
-        url = f'{scheme}://{host}:{port}{scope["path"]}'
-        referer = header.find(b'referer', scope['headers'], url.encode('ascii'))
-
         headers: List[Header] = [
-            (b'host', host.encode()),
+            (b'host', host.encode('ascii')),
             (b'referer', referer),
             (b'content-length', b'0'),
             (b'connection', b'close')
@@ -84,13 +77,20 @@ class JwtAuthenticator:
 
         ssl_context = ssl.SSLContext() if scheme == 'https' else None
 
-        logger.debug('Renewing cookie at %s with headers %s', renewal_url, headers)
+        renewal_url = f'{scheme}://{host}{self.token_renewal_path}'
+
+        logger.debug(
+            'Renewing cookie at %s with headers %s',
+            renewal_url,
+            headers
+        )
+
         async with HttpClient(
                 renewal_url,
                 method='POST',
                 headers=headers,
                 ssl=ssl_context
-        ) as (response, body):
+        ) as (response, _):
 
             if response.status_code == response_code.NO_CONTENT:
                 logger.debug('Cookie renewed')
@@ -109,16 +109,15 @@ class JwtAuthenticator:
                 raise Exception()
 
     def _make_authenticate_location(self, scope: Scope) -> bytes:
-        host_header = b':authority' if scope['http_version'] == '2' else b'host'
-        scheme = scope['scheme']
-        host = header.find(host_header, scope['headers']).decode()
-        path = scope['path']
+        scheme: str = get_scheme(scope).decode('ascii')
+        host = get_host(scope).decode('ascii')
+        path: str = scope['path']
         if scope['query_string']:
             path += '?' + scope['query_string'].decode()
         url = f'{scheme}://{host}{path}'
         query_string = urlencode([('redirect', url)])
         location = f'{scheme}://{host}{self.authentication_path}?{query_string}'
-        return location
+        return location.encode()
 
     async def __call__(
             self,
@@ -136,7 +135,7 @@ class JwtAuthenticator:
             if token is None:
                 if self.authentication_path:
                     location = self._make_authenticate_location(scope)
-                    return response_code.FOUND, [(b'location', location.encode())]
+                    return response_code.FOUND, [(b'location', location)]
                 return response_code.UNAUTHORIZED
 
             now = datetime.utcnow()
