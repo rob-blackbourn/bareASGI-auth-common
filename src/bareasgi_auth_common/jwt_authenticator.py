@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 import ssl
 from typing import List, Optional
+from urllib.parse import urlencode
 
 from baretypes import (
     Scope,
@@ -31,7 +32,8 @@ class JwtAuthenticator:
     def __init__(
             self,
             token_renewal_path: str,
-            token_manager: TokenManager
+            token_manager: TokenManager,
+            authentication_path: Optional[str] = None
     ) -> None:
         """Initialise the JWT Authenticator
 
@@ -42,6 +44,7 @@ class JwtAuthenticator:
         """
         self.token_renewal_path = token_renewal_path
         self.token_manager = token_manager
+        self.authentication_path = authentication_path
 
 
     async def _renew_cookie(self, scope: Scope, token: bytes) -> Optional[bytes]:
@@ -105,6 +108,17 @@ class JwtAuthenticator:
                 logger.debug('Cookie not renewed - failed to authenticate')
                 raise Exception()
 
+    def _make_authenticate_location(self, scope: Scope) -> bytes:
+        host_header = b':authority' if scope['http_version'] == '2' else b'host'
+        scheme = scope['scheme']
+        host = header.find(host_header, scope['headers']).decode()
+        path = scope['path']
+        if scope['query_string']:
+            path += '?' + scope['query_string'].decode()
+        url = f'{scheme}://{host}{path}'
+        query_string = urlencode([('redirect', url)])
+        location = f'{scheme}://{host}{self.authentication_path}?{query_string}'
+        return location
 
     async def __call__(
             self,
@@ -120,6 +134,9 @@ class JwtAuthenticator:
         try:
             token = self.token_manager.get_token_from_headers(scope['headers'])
             if token is None:
+                if self.authentication_path:
+                    location = self._make_authenticate_location(scope)
+                    return response_code.FOUND, [(b'location', location.encode())]
                 return response_code.UNAUTHORIZED
 
             now = datetime.utcnow()
