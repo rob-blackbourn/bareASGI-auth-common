@@ -1,5 +1,4 @@
-"""
-bareASGI-auth-common
+"""bareASGI_auth_common
 """
 
 from .token_manager import TokenManager

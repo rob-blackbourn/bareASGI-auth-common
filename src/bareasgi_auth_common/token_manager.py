@@ -1,5 +1,4 @@
-"""
-Token Manager
+"""Token Manager
 """
 
 from datetime import datetime, timedelta
@@ -28,22 +27,16 @@ class TokenManager:
             path: str,
             max_age: timedelta
     ) -> None:
-        """Initialise the token manager
+        """A token manager
 
-        :param secret: The secret shared by all authenticators
-        :type secret: str
-        :param token_expiry: The time before a token requires renewing.
-        :type token_expiry: timedelta
-        :param issuer: The cookie issuer
-        :type issuer: str
-        :param cookie_name: The name of the cookie in which the token is stored.
-        :type cookie_name: str
-        :param domain: The cookie domain
-        :type domain: str
-        :param path: The cookie path
-        :type path: str
-        :param max_age: The cookie maximum age
-        :type max_age: timedelta
+        Args:
+            secret (str): The secret used for signing the JWT token.
+            token_expiry (timedelta): The token expiry
+            issuer (str): The cookie issuer
+            cookie_name (str): The cookie name
+            domain (str): The cookie domain
+            path (str): The cookie path
+            max_age (timedelta): The maximum age of the cookie.
         """
         self.secret = secret
         self.token_expiry = token_expiry
@@ -54,16 +47,15 @@ class TokenManager:
         self.max_age = max_age
 
     def encode(self, email: str, now: datetime, issued_at: datetime) -> bytes:
-        """Encode the cookie as a JSON web token
+        """Encode the JSON web token.
 
-        :param email: The email address of the user
-        :type email: str
-        :param now: The current time in UTC
-        :type now: datetime
-        :param issued_at: The time the cookie was issued
-        :type issued_at: datetime
-        :return: The information encoded as a JSON web token
-        :rtype: bytes
+        Args:
+            email (str): The user identification
+            now (datetime): The current time
+            issued_at (datetime): When the token was originally issued
+
+        Returns:
+            bytes: [description]
         """
         expiry = now + self.token_expiry
         logger.debug("Token will expire at %s", expiry)
@@ -78,10 +70,11 @@ class TokenManager:
     def decode(self, token: bytes) -> Mapping[str, Any]:
         """Decode the JSON web token
 
-        :param token: The token
-        :type token: bytes
-        :return: The decoded token
-        :rtype: Mapping[str, Any]
+        Args:
+            token (bytes): The token
+
+        Returns:
+            Mapping[str, Any]: A mapping of the payload.
         """
         payload = jwt.decode(token, key=self.secret,
                              options={'verify_exp': False})
@@ -90,12 +83,13 @@ class TokenManager:
         return payload
 
     def get_token_from_headers(self, headers: List[Header]) -> Optional[bytes]:
-        """Get the token from the headers or None if not present
+        """Gets the token from the headers if present.
 
-        :param headers: The headers
-        :type headers: List[Header]
-        :return: The token of None if not present
-        :rtype: Optional[bytes]
+        Args:
+            headers (List[Header]): The headers
+
+        Returns:
+            Optional[bytes]: The token or None if not found.
         """
         tokens = header.cookie(headers).get(self.cookie_name)
         if tokens is None or not tokens:
@@ -106,12 +100,14 @@ class TokenManager:
         return token
 
     def get_jwt_payload_from_headers(self, headers: List[Header]) -> Optional[Mapping[str, Any]]:
-        """Gets the JSON web token from the headers of None if not present
+        """Gets the payload of the JSON web token from the headers
 
-        :param headers: The headers
-        :type headers: List[Header]
-        :return: The payload of the JSON web token if found, otherwise None.
-        :rtype: Optional[Mapping[str, Any]]
+        Args:
+            headers (List[Header]): The headers
+
+        Returns:
+            Optional[Mapping[str, Any]]: The payload of the JSON web token if
+                present; otherwise None.
         """
         token = self.get_token_from_headers(headers)
         payload = self.decode(token) if token is not None else None
@@ -120,10 +116,11 @@ class TokenManager:
     def generate_cookie(self, email: str) -> bytes:
         """Generate a new cookie
 
-        :param email: The email address of the user
-        :type email: str
-        :return: The generated cookie
-        :rtype: bytes
+        Args:
+            email (str): The user identification
+
+        Returns:
+            bytes: The cookie
         """
         now = datetime.utcnow()
         token = self.encode(email, now, now)
@@ -132,10 +129,11 @@ class TokenManager:
     def make_cookie(self, token: bytes) -> bytes:
         """Make a cookie from a token
 
-        :param token: The token
-        :type token: bytes
-        :return: A cookie that can be used in an HTTP header
-        :rtype: bytes
+        Args:
+            token (bytes): The token
+
+        Returns:
+            bytes: The cookie
         """
         cookie = encode_set_cookie(
             self.cookie_name,

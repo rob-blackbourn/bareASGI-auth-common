@@ -1,10 +1,8 @@
-"""
-JWT Authenticator
+"""JWT Authenticator
 """
 
 from datetime import datetime
 import logging
-import ssl
 from typing import List, Optional
 from urllib.parse import urlencode
 
@@ -34,18 +32,23 @@ class JwtAuthenticator:
             self,
             token_renewal_path: str,
             token_manager: TokenManager,
-            authentication_path: Optional[str] = None
+            authentication_path: Optional[str] = None,
+            cafile: Optional[str] = None
     ) -> None:
         """Initialise the JWT Authenticator
 
-        :param token_renewal_path: The path at which tokens can be renewed
-        :type token_renewal_path: str
-        :param token_manager: The token manager instance
-        :type token_manager: TokenManager
+        Args:
+            token_renewal_path (str): The path at which tokens can be renewed
+            token_manager (TokenManager): The token manager instance
+            authentication_path (Optional[str], optional): The authentication
+                path. Defaults to None.
+            authentication_path (Optional[str], optional): The path to the ssl
+                certificates file. Defaults to None.
         """
         self.token_renewal_path = token_renewal_path
         self.token_manager = token_manager
         self.authentication_path = authentication_path
+        self.cafile = cafile
 
     async def _renew_cookie(
             self,
@@ -75,8 +78,6 @@ class JwtAuthenticator:
             cookie = self.token_manager.cookie_name + b'=' + token
             headers.append((b'cookie', cookie))
 
-        ssl_context = ssl.SSLContext() if scheme == 'https' else None
-
         renewal_url = f'{scheme}://{host}{self.token_renewal_path}'
 
         logger.debug(
@@ -89,20 +90,22 @@ class JwtAuthenticator:
                 renewal_url,
                 method='POST',
                 headers=headers,
-                ssl=ssl_context
-        ) as (response, _):
+                cafile=self.cafile
+        ) as response:
 
-            if response.status_code == response_code.NO_CONTENT:
+            if response['status_code'] == response_code.NO_CONTENT:
                 logger.debug('Cookie renewed')
-                all_set_cookies = header.set_cookie(response.headers)
-                auth_set_cookies = all_set_cookies.get(self.token_manager.cookie_name)
+                all_set_cookies = header.set_cookie(response['headers'])
+                auth_set_cookies = all_set_cookies.get(
+                    self.token_manager.cookie_name)
                 if auth_set_cookies is None:
                     raise RuntimeError('No cookie returned')
                 kwargs = auth_set_cookies[0]
                 set_cookie = encode_set_cookie(**kwargs)
                 return set_cookie
-            elif response.status_code == response_code.UNAUTHORIZED:
-                logger.debug('Cookie not renewed - client requires authentication')
+            elif response['status_code'] == response_code.UNAUTHORIZED:
+                logger.debug(
+                    'Cookie not renewed - client requires authentication')
                 return None
             else:
                 logger.debug('Cookie not renewed - failed to authenticate')
@@ -163,6 +166,6 @@ class JwtAuthenticator:
 
             return status, headers, body, pushes
 
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             logger.exception("JWT authentication failed")
             return response_code.INTERNAL_SERVER_ERROR
