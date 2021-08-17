@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 import logging
-from typing import Mapping, Any, List, Optional, Sequence
+from typing import Mapping, Any, List, Optional
 
 from baretypes import Header
 from bareutils import encode_set_cookie
@@ -19,38 +19,38 @@ class TokenManager:
     def __init__(
             self,
             secret: str,
-            token_expiry: timedelta,
+            lease_expiry: timedelta,
             issuer: str,
             cookie_name: str,
             domain: str,
             path: str,
-            max_age: timedelta
+            session_expiry: timedelta
     ) -> None:
         """A token manager
 
         Args:
             secret (str): The secret used for signing the JWT token.
-            token_expiry (timedelta): The token expiry
+            lease_expiry (timedelta): The token expiry
             issuer (str): The cookie issuer
             cookie_name (str): The cookie name
             domain (str): The cookie domain
             path (str): The cookie path
-            max_age (timedelta): The maximum age of the cookie.
+            session_expiry (timedelta): The maximum age of the cookie.
         """
         self.secret = secret
-        self.token_expiry = token_expiry
+        self.lease_expiry = lease_expiry
         self.issuer = issuer
         self.cookie_name = cookie_name.encode()
         self.domain = domain.encode()
         self.path = path.encode()
-        self.max_age = max_age
+        self.session_expiry = session_expiry
 
     def encode(
             self,
             email: str,
             now: datetime,
             issued_at: datetime,
-            token_expiry: Optional[timedelta],
+            lease_expiry: Optional[timedelta],
             **kwargs
     ) -> bytes:
         """Encode the JSON web token.
@@ -59,14 +59,14 @@ class TokenManager:
             email (str): The user identification
             now (datetime): The current time
             issued_at (datetime): When the token was originally issued
-            token_expiry (Optional[timedelta]): An optional expiry.
+            lease_expiry (Optional[timedelta]): An optional expiry.
 
         Returns:
             bytes: The information encoded as a JSON web token.
         """
-        if token_expiry is None:
-            token_expiry = self.token_expiry
-        expiry = now + token_expiry
+        if lease_expiry is None:
+            lease_expiry = self.lease_expiry
+        expiry = now + lease_expiry
         LOGGER.debug("Token will expire at %s", expiry)
         payload = {
             'iss': self.issuer,
@@ -154,7 +154,7 @@ class TokenManager:
         cookie = encode_set_cookie(
             self.cookie_name,
             token,
-            max_age=self.max_age,
+            max_age=self.session_expiry,
             domain=self.domain,
             path=self.path,
             http_only=True

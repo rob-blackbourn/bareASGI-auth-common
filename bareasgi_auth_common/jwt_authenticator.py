@@ -131,7 +131,7 @@ class JwtAuthenticator:
                 return True
         return False
 
-    def get_token_status(self, scope: Scope, token: Optional[bytes]) -> TokenStatus:
+    def get_token_status(self, token: Optional[bytes]) -> TokenStatus:
         try:
             if token is None:
                 LOGGER.debug('Token missing')
@@ -192,7 +192,7 @@ class JwtAuthenticator:
 
         try:
             token = self.token_manager.get_token_from_headers(scope['headers'])
-            token_status = self.get_token_status(scope, token)
+            token_status = self.get_token_status(token)
 
             if token_status == TokenStatus.MISSING:
                 if not self.authentication_path:
