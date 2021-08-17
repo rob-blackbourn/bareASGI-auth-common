@@ -1,9 +1,8 @@
-"""Token Manager
-"""
+"""Token Manager"""
 
 from datetime import datetime, timedelta
 import logging
-from typing import Mapping, Any, List, Optional
+from typing import Mapping, Any, List, Optional, Sequence
 
 from baretypes import Header
 from bareutils import encode_set_cookie
@@ -11,7 +10,7 @@ import bareutils.header as header
 import jwt
 
 # pylint: disable=invalid-name
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class TokenManager:
@@ -46,25 +45,36 @@ class TokenManager:
         self.path = path.encode()
         self.max_age = max_age
 
-    def encode(self, email: str, now: datetime, issued_at: datetime) -> bytes:
+    def encode(
+            self,
+            email: str,
+            now: datetime,
+            issued_at: datetime,
+            token_expiry: Optional[timedelta],
+            **kwargs
+    ) -> bytes:
         """Encode the JSON web token.
 
         Args:
             email (str): The user identification
             now (datetime): The current time
             issued_at (datetime): When the token was originally issued
+            token_expiry (Optional[timedelta]): An optional expiry.
 
         Returns:
-            bytes: [description]
+            bytes: The information encoded as a JSON web token.
         """
-        expiry = now + self.token_expiry
-        logger.debug("Token will expire at %s", expiry)
+        if token_expiry is None:
+            token_expiry = self.token_expiry
+        expiry = now + token_expiry
+        LOGGER.debug("Token will expire at %s", expiry)
         payload = {
             'iss': self.issuer,
             'sub': email,
             'exp': expiry,
             'iat': issued_at
         }
+        payload.update(kwargs)
         return jwt.encode(payload, key=self.secret)
 
     def decode(self, token: bytes) -> Mapping[str, Any]:
@@ -76,8 +86,11 @@ class TokenManager:
         Returns:
             Mapping[str, Any]: A mapping of the payload.
         """
-        payload = jwt.decode(token, key=self.secret,
-                             options={'verify_exp': False})
+        payload = jwt.decode(
+            token,
+            key=self.secret,
+            options={'verify_exp': False}
+        )
         payload['exp'] = datetime.utcfromtimestamp(payload['exp'])
         payload['iat'] = datetime.utcfromtimestamp(payload['iat'])
         return payload
@@ -86,7 +99,7 @@ class TokenManager:
         """Gets the token from the headers if present.
 
         Args:
-            headers (List[Header]): The headers
+            headers (Sequence[Header]): The headers
 
         Returns:
             Optional[bytes]: The token or None if not found.
@@ -95,11 +108,14 @@ class TokenManager:
         if tokens is None or not tokens:
             return None
         if len(tokens) > 1:
-            logger.warning('Multiple tokens in header - using first')
+            LOGGER.warning('Multiple tokens in header - using first')
         token = tokens[0]
         return token
 
-    def get_jwt_payload_from_headers(self, headers: List[Header]) -> Optional[Mapping[str, Any]]:
+    def get_jwt_payload_from_headers(
+            self,
+            headers: List[Header]
+    ) -> Optional[Mapping[str, Any]]:
         """Gets the payload of the JSON web token from the headers
 
         Args:
@@ -123,7 +139,7 @@ class TokenManager:
             bytes: The cookie
         """
         now = datetime.utcnow()
-        token = self.encode(email, now, now)
+        token = self.encode(email, now, now, None)
         return self.make_cookie(token)
 
     def make_cookie(self, token: bytes) -> bytes:
