@@ -1,6 +1,6 @@
 """Tests"""
 
-from bareasgi_auth_common.utils.header import _find_first_header
+from bareasgi_auth_common.utils import _find_first_header
 
 
 def test_find_first_header():
