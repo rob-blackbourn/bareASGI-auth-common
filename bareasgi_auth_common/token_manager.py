@@ -9,6 +9,8 @@ from bareutils import encode_set_cookie
 import bareutils.header as header
 import jwt
 
+from .types import TokenStatus
+
 # pylint: disable=invalid-name
 LOGGER = logging.getLogger(__name__)
 
@@ -160,3 +162,22 @@ class TokenManager:
             http_only=True
         )
         return cookie
+
+    def get_token_status(self, token: Optional[bytes]) -> TokenStatus:
+        try:
+            if token is None:
+                LOGGER.debug('Token missing')
+                return TokenStatus.MISSING
+
+            now = datetime.utcnow()
+
+            payload = self.decode(token)
+            if payload['exp'] < now:
+                LOGGER.debug('Token expired')
+                return TokenStatus.EXPIRED
+
+            LOGGER.debug('Token valid')
+            return TokenStatus.VALID
+        except:  # pylint: disable=bare-except
+            LOGGER.exception('Invalid token')
+            return TokenStatus.INVALID

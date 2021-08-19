@@ -131,25 +131,6 @@ class JwtAuthenticator:
                 return True
         return False
 
-    def get_token_status(self, token: Optional[bytes]) -> TokenStatus:
-        try:
-            if token is None:
-                LOGGER.debug('Token missing')
-                return TokenStatus.MISSING
-
-            now = datetime.utcnow()
-
-            payload = self.token_manager.decode(token)
-            if payload['exp'] < now:
-                LOGGER.debug('Token expired')
-                return TokenStatus.EXPIRED
-
-            LOGGER.debug('Token valid')
-            return TokenStatus.VALID
-        except:  # pylint: disable=bare-except
-            LOGGER.exception('Invalid token')
-            return TokenStatus.INVALID
-
     async def get_token_and_cookie(
             self,
             scope: Scope,
@@ -192,7 +173,7 @@ class JwtAuthenticator:
 
         try:
             token = self.token_manager.get_token_from_headers(scope['headers'])
-            token_status = self.get_token_status(token)
+            token_status = self.token_manager.get_token_status(token)
 
             if token_status == TokenStatus.MISSING:
                 if not self.authentication_path:
