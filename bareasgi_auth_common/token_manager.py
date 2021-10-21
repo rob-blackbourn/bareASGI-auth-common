@@ -1,5 +1,4 @@
-"""Token Manager
-"""
+"""Token Manager"""
 
 from datetime import datetime, timedelta
 import logging
@@ -10,8 +9,10 @@ from bareutils import encode_set_cookie
 import bareutils.header as header
 import jwt
 
+from .types import TokenStatus
+
 # pylint: disable=invalid-name
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class TokenManager:
@@ -20,51 +21,62 @@ class TokenManager:
     def __init__(
             self,
             secret: str,
-            token_expiry: timedelta,
+            lease_expiry: timedelta,
             issuer: str,
             cookie_name: str,
             domain: str,
             path: str,
-            max_age: timedelta
+            session_expiry: timedelta
     ) -> None:
         """A token manager
 
         Args:
             secret (str): The secret used for signing the JWT token.
-            token_expiry (timedelta): The token expiry
+            lease_expiry (timedelta): The token expiry
             issuer (str): The cookie issuer
             cookie_name (str): The cookie name
             domain (str): The cookie domain
             path (str): The cookie path
-            max_age (timedelta): The maximum age of the cookie.
+            session_expiry (timedelta): The maximum age of the cookie.
         """
         self.secret = secret
-        self.token_expiry = token_expiry
+        self.lease_expiry = lease_expiry
         self.issuer = issuer
         self.cookie_name = cookie_name.encode()
         self.domain = domain.encode()
         self.path = path.encode()
-        self.max_age = max_age
+        self.session_expiry = session_expiry
 
-    def encode(self, email: str, now: datetime, issued_at: datetime) -> bytes:
+    def encode(
+            self,
+            email: str,
+            now: datetime,
+            issued_at: datetime,
+            lease_expiry: Optional[timedelta],
+            **kwargs
+    ) -> bytes:
         """Encode the JSON web token.
 
         Args:
             email (str): The user identification
             now (datetime): The current time
             issued_at (datetime): When the token was originally issued
+            lease_expiry (Optional[timedelta]): An optional expiry.
 
         Returns:
-            bytes: [description]
+            bytes: The information encoded as a JSON web token.
         """
-        expiry = now + self.token_expiry
-        logger.debug("Token will expire at %s", expiry)
+        if lease_expiry is None:
+            lease_expiry = self.lease_expiry
+        expiry = now + lease_expiry
+        LOGGER.debug("Token will expire at %s", expiry)
         payload = {
             'iss': self.issuer,
             'sub': email,
             'exp': expiry,
             'iat': issued_at
         }
+        payload.update(kwargs)
         return jwt.encode(payload, key=self.secret)
 
     def decode(self, token: bytes) -> Mapping[str, Any]:
@@ -76,8 +88,11 @@ class TokenManager:
         Returns:
             Mapping[str, Any]: A mapping of the payload.
         """
-        payload = jwt.decode(token, key=self.secret,
-                             options={'verify_exp': False})
+        payload = jwt.decode(
+            token,
+            key=self.secret,
+            options={'verify_exp': False}
+        )
         payload['exp'] = datetime.utcfromtimestamp(payload['exp'])
         payload['iat'] = datetime.utcfromtimestamp(payload['iat'])
         return payload
@@ -86,7 +101,7 @@ class TokenManager:
         """Gets the token from the headers if present.
 
         Args:
-            headers (List[Header]): The headers
+            headers (Sequence[Header]): The headers
 
         Returns:
             Optional[bytes]: The token or None if not found.
@@ -95,11 +110,14 @@ class TokenManager:
         if tokens is None or not tokens:
             return None
         if len(tokens) > 1:
-            logger.warning('Multiple tokens in header - using first')
+            LOGGER.warning('Multiple tokens in header - using first')
         token = tokens[0]
         return token
 
-    def get_jwt_payload_from_headers(self, headers: List[Header]) -> Optional[Mapping[str, Any]]:
+    def get_jwt_payload_from_headers(
+            self,
+            headers: List[Header]
+    ) -> Optional[Mapping[str, Any]]:
         """Gets the payload of the JSON web token from the headers
 
         Args:
@@ -123,7 +141,7 @@ class TokenManager:
             bytes: The cookie
         """
         now = datetime.utcnow()
-        token = self.encode(email, now, now)
+        token = self.encode(email, now, now, None)
         return self.make_cookie(token)
 
     def make_cookie(self, token: bytes) -> bytes:
@@ -138,9 +156,28 @@ class TokenManager:
         cookie = encode_set_cookie(
             self.cookie_name,
             token,
-            max_age=self.max_age,
+            max_age=self.session_expiry,
             domain=self.domain,
             path=self.path,
             http_only=True
         )
         return cookie
+
+    def get_token_status(self, token: Optional[bytes]) -> TokenStatus:
+        try:
+            if token is None:
+                LOGGER.debug('Token missing')
+                return TokenStatus.MISSING
+
+            now = datetime.utcnow()
+
+            payload = self.decode(token)
+            if payload['exp'] < now:
+                LOGGER.debug('Token expired')
+                return TokenStatus.EXPIRED
+
+            LOGGER.debug('Token valid')
+            return TokenStatus.VALID
+        except:  # pylint: disable=bare-except
+            LOGGER.exception('Invalid token')
+            return TokenStatus.INVALID
