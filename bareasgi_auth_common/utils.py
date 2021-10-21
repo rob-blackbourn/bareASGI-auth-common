@@ -1,13 +1,13 @@
 """Utilities"""
 
-from typing import List, Sequence, Optional
+from typing import Iterable, Optional, Tuple
 
-from baretypes import Scope, Header
+from asgi_typing import HTTPScope
 
 
 def _find_first_header(
-    names: Sequence[bytes],
-    headers: Sequence[Header],
+    names: Iterable[bytes],
+    headers: Iterable[Tuple[bytes, bytes]],
     default: Optional[bytes] = None
 ) -> Optional[bytes]:
     for name in names:
@@ -17,13 +17,13 @@ def _find_first_header(
     return default
 
 
-def get_host(scope: Scope) -> bytes:
+def get_host(scope: HTTPScope) -> bytes:
     host = _find_first_header((b'x-forwarded-host', b'host'), scope['headers'])
     assert host is not None
     return host
 
 
-def get_scheme(scope: Scope) -> bytes:
+def get_scheme(scope: HTTPScope) -> bytes:
     scheme = _find_first_header((b'x-forwarded-proto',), scope['headers'])
     if scheme is None:
         scheme = scope['scheme'].encode()

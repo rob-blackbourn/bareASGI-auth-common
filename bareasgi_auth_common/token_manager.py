@@ -2,16 +2,13 @@
 
 from datetime import datetime, timedelta
 import logging
-from typing import Mapping, Any, List, Optional
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
-from baretypes import Header
-from bareutils import encode_set_cookie
-import bareutils.header as header
+from bareutils import encode_set_cookie, header
 import jwt
 
 from .types import TokenStatus
 
-# pylint: disable=invalid-name
 LOGGER = logging.getLogger(__name__)
 
 
@@ -49,7 +46,7 @@ class TokenManager:
 
     def encode(
             self,
-            email: str,
+            user: str,
             now: datetime,
             issued_at: datetime,
             lease_expiry: Optional[timedelta],
@@ -58,13 +55,13 @@ class TokenManager:
         """Encode the JSON web token.
 
         Args:
-            email (str): The user identification
+            user (str): The user identification
             now (datetime): The current time
             issued_at (datetime): When the token was originally issued
             lease_expiry (Optional[timedelta]): An optional expiry.
 
         Returns:
-            bytes: The information encoded as a JSON web token.
+            str: The information encoded as a JSON web token.
         """
         if lease_expiry is None:
             lease_expiry = self.lease_expiry
@@ -72,12 +69,13 @@ class TokenManager:
         LOGGER.debug("Token will expire at %s", expiry)
         payload = {
             'iss': self.issuer,
-            'sub': email,
+            'sub': user,
             'exp': expiry,
             'iat': issued_at
         }
         payload.update(kwargs)
-        return jwt.encode(payload, key=self.secret)
+        token = jwt.encode(payload, key=self.secret, algorithm="HS256")
+        return token.encode('ascii')
 
     def decode(self, token: bytes) -> Mapping[str, Any]:
         """Decode the JSON web token
@@ -89,19 +87,23 @@ class TokenManager:
             Mapping[str, Any]: A mapping of the payload.
         """
         payload = jwt.decode(
-            token,
+            token.decode('ascii'),
             key=self.secret,
-            options={'verify_exp': False}
+            options={'verify_exp': False},
+            algorithms=["HS256"]
         )
         payload['exp'] = datetime.utcfromtimestamp(payload['exp'])
         payload['iat'] = datetime.utcfromtimestamp(payload['iat'])
         return payload
 
-    def get_token_from_headers(self, headers: List[Header]) -> Optional[bytes]:
+    def get_token_from_headers(
+            self,
+            headers: Iterable[Tuple[bytes, bytes]]
+    ) -> Optional[bytes]:
         """Gets the token from the headers if present.
 
         Args:
-            headers (Sequence[Header]): The headers
+            headers (Iterable[Tuple[bytes, bytes]]): The headers
 
         Returns:
             Optional[bytes]: The token or None if not found.
@@ -116,12 +118,12 @@ class TokenManager:
 
     def get_jwt_payload_from_headers(
             self,
-            headers: List[Header]
+            headers: List[Tuple[bytes, bytes]]
     ) -> Optional[Mapping[str, Any]]:
         """Gets the payload of the JSON web token from the headers
 
         Args:
-            headers (List[Header]): The headers
+            headers (List[Tuple[bytes, bytes]]): The headers
 
         Returns:
             Optional[Mapping[str, Any]]: The payload of the JSON web token if
@@ -131,17 +133,17 @@ class TokenManager:
         payload = self.decode(token) if token is not None else None
         return payload
 
-    def generate_cookie(self, email: str) -> bytes:
+    def generate_cookie(self, user: str) -> bytes:
         """Generate a new cookie
 
         Args:
-            email (str): The user identification
+            user (str): The user identification
 
         Returns:
             bytes: The cookie
         """
         now = datetime.utcnow()
-        token = self.encode(email, now, now, None)
+        token = self.encode(user, now, now, None)
         return self.make_cookie(token)
 
     def make_cookie(self, token: bytes) -> bytes:

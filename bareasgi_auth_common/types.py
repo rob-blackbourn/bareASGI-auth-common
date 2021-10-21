@@ -1,12 +1,12 @@
 """Types"""
 
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from urllib.error import HTTPError
 from urllib.parse import parse_qs
 
+from asgi_typing import HTTPScope
 import bareutils.response_code as response_code
-from baretypes import Header, Scope
 
 from .utils import get_host, get_scheme
 
@@ -22,9 +22,9 @@ class BareASGIError(HTTPError):
 
     def __init__(
             self,
-            scope: Scope,
+            scope: HTTPScope,
             code: int,
-            hdrs: Optional[List[Header]],
+            hdrs: Optional[List[Tuple[bytes, bytes]]],
             msg: Optional[str]
     ) -> None:
         host = get_host(scope).decode('ascii')
@@ -42,7 +42,7 @@ class BareASGIError(HTTPError):
 
 class ForbiddenError(BareASGIError):
 
-    def __init__(self, scope: Scope, msg: str) -> None:
+    def __init__(self, scope: HTTPScope, msg: str) -> None:
         super().__init__(
             scope,
             response_code.FORBIDDEN,
@@ -53,7 +53,7 @@ class ForbiddenError(BareASGIError):
 
 class UnauthorisedError(BareASGIError):
 
-    def __init__(self, scope: Scope, msg: str) -> None:
+    def __init__(self, scope: HTTPScope, msg: str) -> None:
         super().__init__(
             scope,
             response_code.UNAUTHORIZED,

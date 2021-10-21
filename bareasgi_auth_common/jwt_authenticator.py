@@ -1,29 +1,19 @@
 """JWT Authenticator
 """
 
-from datetime import datetime
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from urllib.parse import urlencode
 
-from baretypes import (
-    Scope,
-    Header,
-    Info,
-    RouteMatches,
-    Content,
-    HttpResponse,
-    HttpChainedCallback
-)
-from bareutils import response_code, encode_set_cookie
-import bareutils.header as header
+from asgi_typing import HTTPScope
+from bareasgi import HttpRequest, HttpRequestCallback, HttpResponse
 from bareclient import HttpClient
+from bareutils import header, response_code, encode_set_cookie
 
 from .token_manager import TokenManager
 from .types import TokenStatus, UnauthorisedError, ForbiddenError
 from .utils import get_scheme, get_host
 
-# pylint: disable=invalid-name
 LOGGER = logging.getLogger(__name__)
 
 
@@ -44,7 +34,7 @@ class JwtAuthenticator:
             token_manager (TokenManager): The token manager instance
             authentication_path (Optional[str], optional): The authentication
                 path. Defaults to None.
-            whitelist (Sequeunce[str], optional): Routes for which
+            whitelist (Sequence[str], optional): Routes for which
                 authentication is not required. Defaults to None.
         """
         self.token_renewal_path = token_renewal_path
@@ -54,7 +44,7 @@ class JwtAuthenticator:
 
     async def _renew_cookie(
             self,
-            scope: Scope,
+            scope: HTTPScope,
             token: bytes
     ) -> Optional[Mapping[str, Any]]:
 
@@ -72,7 +62,7 @@ class JwtAuthenticator:
         )
         assert referer is not None
 
-        headers: List[Header] = [
+        headers: List[Tuple[bytes, bytes]] = [
             (b'host', host_bytes),
             (b'referer', referer),
             (b'content-length', b'0'),
@@ -96,16 +86,16 @@ class JwtAuthenticator:
                 headers=headers
         ) as response:
 
-            if response['status_code'] == response_code.NO_CONTENT:
+            if response.status == response_code.NO_CONTENT:
                 LOGGER.debug('Cookie renewed')
-                all_set_cookies = header.set_cookie(response['headers'])
+                all_set_cookies = header.set_cookie(response.headers)
                 auth_set_cookies = all_set_cookies.get(
                     self.token_manager.cookie_name
                 )
                 if auth_set_cookies is None:
                     raise RuntimeError('No cookie returned')
                 return auth_set_cookies[0]
-            elif response['status_code'] == response_code.UNAUTHORIZED:
+            elif response.status == response_code.UNAUTHORIZED:
                 LOGGER.debug(
                     'Cookie not renewed - client requires authentication'
                 )
@@ -114,7 +104,7 @@ class JwtAuthenticator:
         LOGGER.debug('Cookie not renewed - failed to authenticate')
         raise UnauthorisedError(scope, 'Failed to authenticate')
 
-    def _make_authenticate_location(self, scope: Scope) -> bytes:
+    def _make_authenticate_location(self, scope: HTTPScope) -> bytes:
         scheme: str = get_scheme(scope).decode('ascii')
         host = get_host(scope).decode('ascii')
         path: str = scope['path']
@@ -133,7 +123,7 @@ class JwtAuthenticator:
 
     async def get_token_and_cookie(
             self,
-            scope: Scope,
+            scope: HTTPScope,
             token_status: TokenStatus
     ) -> Tuple[bytes, Optional[bytes]]:
         token = self.token_manager.get_token_from_headers(scope['headers'])
@@ -158,54 +148,52 @@ class JwtAuthenticator:
 
     async def __call__(
             self,
-            scope: Scope,
-            info: Info,
-            matches: RouteMatches,
-            content: Content,
-            handler: HttpChainedCallback
+            request: HttpRequest,
+            handler: HttpRequestCallback
     ) -> HttpResponse:
 
-        LOGGER.debug('Jwt Authentication Request: %s', scope["path"])
+        LOGGER.debug('Jwt Authentication Request: %s', request.scope["path"])
 
-        if self._is_whitelisted(scope['path']):
-            LOGGER.debug('The path is whitelisted: "%s"', scope['path'])
-            return await handler(scope, info, matches, content)
+        if self._is_whitelisted(request.scope['path']):
+            LOGGER.debug(
+                'The path is whitelisted: "%s"',
+                request.scope['path']
+            )
+            return await handler(request)
 
         try:
-            token = self.token_manager.get_token_from_headers(scope['headers'])
+            token = self.token_manager.get_token_from_headers(
+                request.scope['headers']
+            )
             token_status = self.token_manager.get_token_status(token)
 
             if token_status == TokenStatus.MISSING:
                 if not self.authentication_path:
-                    return response_code.UNAUTHORIZED
+                    return HttpResponse(response_code.UNAUTHORIZED)
 
                 # Redirect the client ot the authenticator.
-                location = self._make_authenticate_location(scope)
-                return response_code.FOUND, [(b'location', location)]
+                location = self._make_authenticate_location(request.scope)
+                return HttpResponse(response_code.FOUND, [(b'location', location)])
 
-            token, cookie = await self.get_token_and_cookie(scope, token_status)
+            token, cookie = await self.get_token_and_cookie(request.scope, token_status)
 
             session_info: Dict[str, Any] = {}
-            if info is not None:
-                session_info.update(info)
+            session_info.update(request.info)
 
             assert token is not None
             session_info['jwt_token'] = token
             session_info['jwt'] = self.token_manager.decode(token)
 
-            status, headers, body, pushes = await handler(
-                scope,
-                session_info,
-                matches,
-                content
-            )
+            new_request = HttpRequest(
+                request.scope, session_info, request.context, request.matches, request.body)
+            response = await handler(new_request)
 
             if cookie:
-                if headers is None:
-                    headers = []
-                headers.append((b"set-cookie", cookie))
+                if response.headers is None:
+                    response.headers = []
+                response.headers.append((b"set-cookie", cookie))
 
-            return status, headers, body, pushes
+            return response
 
         except:  # pylint: disable=bare-except
             LOGGER.exception("JWT authentication failed")
