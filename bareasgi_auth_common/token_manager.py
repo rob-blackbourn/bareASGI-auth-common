@@ -175,11 +175,12 @@ class TokenManager:
             now = datetime.utcnow()
 
             payload = self.decode(token)
-            if payload['exp'] < now:
+            expiry = payload['exp']
+            if expiry < now:
                 LOGGER.debug('Token expired')
                 return TokenStatus.EXPIRED
 
-            LOGGER.debug('Token valid')
+            LOGGER.debug('Token valid for %s', expiry - now)
             return TokenStatus.VALID
         except:  # pylint: disable=bare-except
             LOGGER.exception('Invalid token')
