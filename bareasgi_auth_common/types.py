@@ -2,10 +2,8 @@
 
 from enum import Enum, auto
 from typing import List, Optional, Tuple
-from urllib.error import HTTPError
-from urllib.parse import parse_qs
 
-from asgi_typing import HTTPScope
+from bareasgi import HttpRequest
 import bareutils.response_code as response_code
 
 from .utils import get_host, get_scheme
@@ -18,45 +16,41 @@ class TokenStatus(Enum):
     MISSING = auto()
 
 
-class BareASGIError(HTTPError):
+class BareASGIError(Exception):
 
     def __init__(
             self,
-            scope: HTTPScope,
-            code: int,
-            hdrs: Optional[List[Tuple[bytes, bytes]]],
-            msg: Optional[str]
+            request: HttpRequest,
+            status: int,
+            headers: Optional[List[Tuple[bytes, bytes]]],
+            message: Optional[str]
     ) -> None:
-        host = get_host(scope).decode('ascii')
-        scheme = get_scheme(scope).decode('ascii')
-        url = f'{scheme}://{host}{scope["path"]}'
-
-        super().__init__(
-            url,
-            code,
-            msg,  # type: ignore
-            hdrs,  # type: ignore
-            None
-        )
+        super().__init__(message)
+        host = get_host(request).decode('ascii')
+        scheme = get_scheme(request)
+        self.url = f'{scheme}://{host}{request.scope["path"]}'
+        self.status = status
+        self.headers = headers
+        self.message = message
 
 
 class ForbiddenError(BareASGIError):
 
-    def __init__(self, scope: HTTPScope, msg: str) -> None:
+    def __init__(self, request: HttpRequest, message: str) -> None:
         super().__init__(
-            scope,
+            request,
             response_code.FORBIDDEN,
             [(b'content_type', b'text/plain')],
-            msg
+            message
         )
 
 
-class UnauthorisedError(BareASGIError):
+class UnauthorizedError(BareASGIError):
 
-    def __init__(self, scope: HTTPScope, msg: str) -> None:
+    def __init__(self, request: HttpRequest, message: str) -> None:
         super().__init__(
-            scope,
+            request,
             response_code.UNAUTHORIZED,
             [(b'content_type', b'text/plain')],
-            msg
+            message
         )

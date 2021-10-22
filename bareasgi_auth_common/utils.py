@@ -2,7 +2,7 @@
 
 from typing import Iterable, Optional, Tuple
 
-from asgi_typing import HTTPScope
+from bareasgi import HttpRequest
 
 
 def _find_first_header(
@@ -17,14 +17,21 @@ def _find_first_header(
     return default
 
 
-def get_host(scope: HTTPScope) -> bytes:
-    host = _find_first_header((b'x-forwarded-host', b'host'), scope['headers'])
+def get_host(request: HttpRequest) -> bytes:
+    host = _find_first_header(
+        (b'x-forwarded-host', b'host'),
+        request.scope['headers']
+    )
     assert host is not None
     return host
 
 
-def get_scheme(scope: HTTPScope) -> bytes:
-    scheme = _find_first_header((b'x-forwarded-proto',), scope['headers'])
-    if scheme is None:
-        scheme = scope['scheme'].encode()
-    return scheme
+def get_scheme(request: HttpRequest) -> str:
+    scheme = _find_first_header(
+        (b'x-forwarded-proto',),
+        request.scope['headers']
+    )
+    if scheme is not None:
+        return scheme.decode('ascii')
+
+    return request.scope['scheme']
