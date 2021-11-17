@@ -120,6 +120,11 @@ class JwtAuthenticator(TokenManager):
                     'Cookie not renewed - client requires authentication'
                 )
                 return None
+            else:
+                LOGGER.debug(
+                    "Received unhandled response code %s",
+                    response.status
+                )
 
         LOGGER.debug('Cookie not renewed - failed to authenticate')
         raise UnauthorizedError(request, 'Failed to authenticate')
