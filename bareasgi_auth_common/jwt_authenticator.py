@@ -219,6 +219,17 @@ class JwtAuthenticator(TokenManager):
             LOGGER.exception("JWT authentication failed")
             raise
 
+    async def _handle_whitelisted(
+            self,
+            request: HttpRequest,
+            handler: HttpRequestCallback
+    ) -> HttpResponse:
+        LOGGER.debug(
+            'The path is whitelisted: "%s"',
+            request.scope['path']
+        )
+        return await handler(request)
+
     async def __call__(
             self,
             request: HttpRequest,
@@ -228,10 +239,6 @@ class JwtAuthenticator(TokenManager):
         LOGGER.debug('Jwt Authentication Request: %s', request.scope["path"])
 
         if self._is_whitelisted(request.scope['path']):
-            LOGGER.debug(
-                'The path is whitelisted: "%s"',
-                request.scope['path']
-            )
-            return await handler(request)
+            return await self._handle_whitelisted(request, handler)
         else:
             return await self._handle_authentication(request, handler)

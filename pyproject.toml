@@ -14,7 +14,7 @@ repository = "https://github.com/rob-blackbourn/bareASGI-auth-common"
 python = "^3.8"
 bareclient = "^5.0"
 PyJWT = "^2.3"
-bareasgi = "^4.0"
+bareasgi = "^4.2"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5"
