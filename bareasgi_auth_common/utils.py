@@ -2,8 +2,6 @@
 
 from typing import Iterable, Optional, Tuple
 
-from bareasgi import HttpRequest, WebSocketRequest
-
 
 def _find_first_header(
     names: Iterable[bytes],
