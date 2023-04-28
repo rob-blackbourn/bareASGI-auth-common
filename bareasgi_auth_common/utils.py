@@ -2,7 +2,7 @@
 
 from typing import Iterable, Optional, Tuple
 
-from bareasgi import HttpRequest
+from bareasgi import HttpRequest, WebSocketRequest
 
 
 def _find_first_header(
@@ -26,7 +26,18 @@ def get_host(request: HttpRequest) -> bytes:
     return host
 
 
-def get_scheme(request: HttpRequest) -> str:
+def get_http_scheme(request: HttpRequest) -> str:
+    scheme = _find_first_header(
+        (b'x-forwarded-proto',),
+        request.scope['headers']
+    )
+    if scheme is not None:
+        return scheme.decode('ascii')
+
+    return request.scope['scheme']
+
+
+def get_ws_scheme(request: WebSocketRequest) -> str:
     scheme = _find_first_header(
         (b'x-forwarded-proto',),
         request.scope['headers']

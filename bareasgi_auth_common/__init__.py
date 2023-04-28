@@ -2,17 +2,29 @@
 """
 
 from .helpers import add_jwt_auth_middleware
-from .jwt_authenticator import JwtAuthenticator
+from .http_jwt_authenticator import HttpJwtAuthenticator
 from .token_manager import TokenManager
-from .types import ForbiddenError, UnauthorizedError, TokenStatus, BareASGIError
+from .types import (
+    TokenStatus,
+    BareASGIHttpError,
+    ForbiddenHttpError,
+    UnauthorizedHttpError,
+    BareASGIWebSocketError,
+    ForbiddenWebSocketError,
+    UnauthorizedWebSocketError,
+)
+from .websocket_jwt_authenticator import WebSocketJwtAuthenticator
 
 __all__ = [
     'add_jwt_auth_middleware',
-    'JwtAuthenticator',
+    'HttpJwtAuthenticator',
     'TokenManager',
-    'ForbiddenError',
-    'UnauthorizedError',
+    'ForbiddenHttpError',
+    'UnauthorizedHttpError',
     'TokenStatus',
-    'BareASGIError',
-
+    'BareASGIHttpError',
+    'BareASGIWebSocketError',
+    'ForbiddenWebSocketError',
+    'UnauthorizedWebSocketError',
+    'WebSocketJwtAuthenticator',
 ]
