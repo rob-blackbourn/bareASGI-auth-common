@@ -17,7 +17,7 @@ from .types import (
     UnauthorizedHttpError,
     ForbiddenHttpError
 )
-from .utils import get_http_scheme, get_host
+from .utils import get_scheme, get_host
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,8 +73,8 @@ class HttpJwtAuthenticator(TokenManager):
             token: bytes
     ) -> Optional[Mapping[str, Any]]:
 
-        host = get_host(request)
-        scheme = get_http_scheme(request)
+        host = get_host(request.scope['headers'])
+        scheme = get_scheme(request.scope['headers'], request.scope['scheme'])
         base_url = f'{scheme}://{host.decode("ascii")}'
 
         referer_url = base_url + request.scope["path"]
@@ -144,7 +144,7 @@ class HttpJwtAuthenticator(TokenManager):
         if request.scope['query_string']:
             path += '?' + request.scope['query_string'].decode()
 
-        scheme = get_http_scheme(request)
+        scheme = get_scheme(request.scope['headers'], request.scope['scheme'])
         host = get_host(request.scope['headers']).decode('ascii')
         base_url = f'{scheme}://{host}'
 

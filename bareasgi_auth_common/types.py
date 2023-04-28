@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from bareasgi import HttpRequest, WebSocketRequest
 import bareutils.response_code as response_code
 
-from .utils import get_host, get_http_scheme, get_ws_scheme
+from .utils import get_host, get_scheme
 
 
 class TokenStatus(Enum):
@@ -27,8 +27,8 @@ class BareASGIHttpError(Exception):
             message: Optional[str]
     ) -> None:
         super().__init__(message)
-        host = get_host(request).decode('ascii')
-        scheme = get_http_scheme(request)
+        host = get_host(request.scope['headers']).decode('ascii')
+        scheme = get_scheme(request.scope['headers'], request.scope['scheme'])
         self.url = f'{scheme}://{host}{request.scope["path"]}'
         self.status = status
         self.headers = headers
@@ -67,8 +67,8 @@ class BareASGIWebSocketError(Exception):
             message: Optional[str]
     ) -> None:
         super().__init__(message)
-        host = get_host(request).decode('ascii')
-        scheme = get_ws_scheme(request)
+        host = get_host(request.scope['headers']).decode('ascii')
+        scheme = get_scheme(request.scope['headers'], request.scope['scheme'])
         self.url = f'{scheme}://{host}{request.scope["path"]}'
         self.status = status
         self.headers = headers

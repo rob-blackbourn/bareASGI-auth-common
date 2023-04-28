@@ -79,11 +79,11 @@ class WebSocketJwtAuthenticator(TokenManager):
         Returns:
             bytes: The token.
         """
-        token = self.get_token_from_headers(request)
+        token = self.get_token_from_headers(request.scope['headers'])
         if token_status == TokenStatus.VALID:
             LOGGER.debug('Cookie still valid')
             assert token is not None
-            return token, None
+            return token
 
         if token_status == TokenStatus.EXPIRED and token is not None:
             raise UnauthorizedWebSocketError(request, "Expired cookie")

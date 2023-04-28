@@ -17,32 +17,21 @@ def _find_first_header(
     return default
 
 
-def get_host(request: HttpRequest) -> bytes:
+def get_host(headers: Iterable[Tuple[bytes, bytes]]) -> bytes:
     host = _find_first_header(
         (b'x-forwarded-host', b'host'),
-        request.scope['headers']
+        headers
     )
     assert host is not None
     return host
 
 
-def get_http_scheme(request: HttpRequest) -> str:
-    scheme = _find_first_header(
+def get_scheme(headers: Iterable[Tuple[bytes, bytes]], scheme: str) -> str:
+    forwarded_scheme = _find_first_header(
         (b'x-forwarded-proto',),
-        request.scope['headers']
+        headers
     )
-    if scheme is not None:
-        return scheme.decode('ascii')
+    if forwarded_scheme is not None:
+        return forwarded_scheme.decode('ascii')
 
-    return request.scope['scheme']
-
-
-def get_ws_scheme(request: WebSocketRequest) -> str:
-    scheme = _find_first_header(
-        (b'x-forwarded-proto',),
-        request.scope['headers']
-    )
-    if scheme is not None:
-        return scheme.decode('ascii')
-
-    return request.scope['scheme']
+    return scheme
