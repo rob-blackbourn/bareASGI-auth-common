@@ -11,13 +11,18 @@ from bareclient import HttpClient
 from bareutils import header, response_code, encode_set_cookie
 
 from .token_manager import TokenManager
-from .types import TokenStatus, BareASGIError, UnauthorizedError, ForbiddenError
-from .utils import get_scheme, get_host
+from .types import (
+    TokenStatus,
+    BareASGIHttpError,
+    UnauthorizedHttpError,
+    ForbiddenHttpError
+)
+from .utils import get_http_scheme, get_host
 
 LOGGER = logging.getLogger(__name__)
 
 
-class JwtAuthenticator(TokenManager):
+class HttpJwtAuthenticator(TokenManager):
     """JTW authentication middleware"""
 
     def __init__(
@@ -69,7 +74,8 @@ class JwtAuthenticator(TokenManager):
     ) -> Optional[Mapping[str, Any]]:
 
         host = get_host(request)
-        base_url = f'{get_scheme(request)}://{host.decode("ascii")}'
+        scheme = get_http_scheme(request)
+        base_url = f'{scheme}://{host.decode("ascii")}'
 
         referer_url = base_url + request.scope["path"]
         if request.scope['query_string']:
@@ -127,19 +133,19 @@ class JwtAuthenticator(TokenManager):
                 )
 
         LOGGER.debug('Cookie not renewed - failed to authenticate')
-        raise UnauthorizedError(request, 'Failed to authenticate')
+        raise UnauthorizedHttpError(request, 'Failed to authenticate')
 
     def _make_authenticate_location(self, request: HttpRequest) -> bytes:
         if self.authentication_path is None:
             LOGGER.debug("No path for authentication redirect")
-            raise UnauthorizedError(request, "Cannot authorize")
+            raise UnauthorizedHttpError(request, "Cannot authorize")
 
         path = request.scope['path']
         if request.scope['query_string']:
             path += '?' + request.scope['query_string'].decode()
 
-        scheme = get_scheme(request)
-        host = get_host(request).decode('ascii')
+        scheme = get_http_scheme(request)
+        host = get_host(request.scope['headers']).decode('ascii')
         base_url = f'{scheme}://{host}'
 
         redirect_url = base_url+path
@@ -158,7 +164,20 @@ class JwtAuthenticator(TokenManager):
             request: HttpRequest,
             token_status: TokenStatus
     ) -> Tuple[bytes, Optional[bytes]]:
-        token = self.get_token_from_headers(request)
+        """Get the token and the cookie
+
+        Args:
+            request (HttpRequest): The request.
+            token_status (TokenStatus): The token status.
+
+        Raises:
+            UnauthorizedHttpError: For unauthorized requests.
+            ForbiddenHttpError: For forbidden requests.
+
+        Returns:
+            Tuple[bytes, Optional[bytes]]: The token and the cookie.
+        """
+        token = self.get_token_from_headers(request.scope['headers'])
         if token_status == TokenStatus.VALID:
             LOGGER.debug('Cookie still valid')
             assert token is not None
@@ -170,14 +189,14 @@ class JwtAuthenticator(TokenManager):
             cookie_kwargs = await self._renew_cookie(request, token)
             if cookie_kwargs is None:
                 LOGGER.debug("Unable to renew cookie")
-                raise UnauthorizedError(request, 'Unable to renew cookie')
+                raise UnauthorizedHttpError(request, 'Unable to renew cookie')
 
             token = cast(bytes, cookie_kwargs['value'])
             cookie = encode_set_cookie(**cookie_kwargs)
             return token, cookie
 
         LOGGER.warning('The token was invalid')
-        raise ForbiddenError(request, 'Invalid cookie')
+        raise ForbiddenHttpError(request, 'Invalid cookie')
 
     async def _handle_authentication(
             self,
@@ -186,7 +205,7 @@ class JwtAuthenticator(TokenManager):
     ) -> HttpResponse:
         LOGGER.debug("Handling authentication request")
         try:
-            token = self.get_token_from_headers(request)
+            token = self.get_token_from_headers(request.scope['headers'])
             token_status = self.get_token_status(token)
 
             if token_status == TokenStatus.MISSING:
@@ -209,7 +228,7 @@ class JwtAuthenticator(TokenManager):
 
             return response
 
-        except BareASGIError as error:
+        except BareASGIHttpError as error:
             return HttpResponse(
                 error.status,
                 error.headers,

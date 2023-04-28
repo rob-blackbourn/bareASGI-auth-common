@@ -2,9 +2,8 @@
 
 from datetime import datetime, timedelta
 import logging
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Tuple
 
-from bareasgi.http.http_request import HttpRequest
 from bareutils import encode_set_cookie, header
 import jwt
 
@@ -99,17 +98,17 @@ class TokenManager:
 
     def get_token_from_headers(
             self,
-            request: HttpRequest
+            headers: Iterable[Tuple[bytes, bytes]]
     ) -> Optional[bytes]:
         """Gets the token from the headers if present.
 
         Args:
-            request (HttpRequest): The request
+            headers (Iterable[Tuple[bytes, bytes]]): The headers
 
         Returns:
             Optional[bytes]: The token or None if not found.
         """
-        tokens = header.cookie(request.scope['headers']).get(self.cookie_name)
+        tokens = header.cookie(headers).get(self.cookie_name)
         if tokens is None or not tokens:
             return None
         if len(tokens) > 1:
@@ -119,18 +118,18 @@ class TokenManager:
 
     def get_jwt_payload_from_headers(
             self,
-            request: HttpRequest
+            headers: Iterable[Tuple[bytes, bytes]]
     ) -> Optional[Mapping[str, Any]]:
         """Gets the payload of the JSON web token from the headers
 
         Args:
-            request (HttpRequest): The headers
+            headers (Iterable[Tuple[bytes, bytes]]): The headers
 
         Returns:
             Optional[Mapping[str, Any]]: The payload of the JSON web token if
                 present; otherwise None.
         """
-        token = self.get_token_from_headers(request)
+        token = self.get_token_from_headers(headers)
         payload = self.decode(token) if token is not None else None
         return payload
 
@@ -167,6 +166,14 @@ class TokenManager:
         return cookie
 
     def get_token_status(self, token: Optional[bytes]) -> TokenStatus:
+        """Get the status of the token.
+
+        Args:
+            token (Optional[bytes]): The token.
+
+        Returns:
+            TokenStatus: The status of the token.
+        """
         try:
             if token is None:
                 LOGGER.debug('Token missing')

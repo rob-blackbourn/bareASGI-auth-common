@@ -5,7 +5,8 @@ from typing import Optional, Sequence
 
 from bareasgi import Application
 
-from .jwt_authenticator import JwtAuthenticator
+from .http_jwt_authenticator import HttpJwtAuthenticator
+from .websocket_jwt_authenticator import WebSocketJwtAuthenticator
 
 
 def add_jwt_auth_middleware(
@@ -41,7 +42,7 @@ def add_jwt_auth_middleware(
     Returns:
         Application: The ASGI application.
     """
-    jwt_authenticator = JwtAuthenticator(
+    http_jwt_authenticator = HttpJwtAuthenticator(
         secret,
         lease_expiry,
         issuer,
@@ -53,5 +54,18 @@ def add_jwt_auth_middleware(
         authentication_path,
         whitelist
     )
-    app.middlewares.append(jwt_authenticator)
+    app.middlewares.append(http_jwt_authenticator)
+
+    ws_jwt_authenticator = WebSocketJwtAuthenticator(
+        secret,
+        lease_expiry,
+        issuer,
+        cookie_name,
+        domain,
+        path,
+        session_expiry,
+        whitelist
+    )
+    app.ws_middlewares.append(ws_jwt_authenticator)
+
     return app
